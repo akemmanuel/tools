@@ -8,9 +8,10 @@ Claude Code uses a different configuration system than opencode:
 
 | Feature | opencode | Claude Code |
 |---------|----------|-------------|
-| Main config | `~/.config/opencode/opencode.json` | `~/.claude/settings.json` |
-| Custom instructions | `"instructions": ["file.md"]` | `CLAUDE.md` files + `@imports` |
+| Main config | `~/.config/opencode/config.json` | `~/.claude/settings.json` |
+| Custom instructions | `"instructions": ["file.md"]` | `AGENTS.md` files + `@imports` |
 | Permissions | `"permission": { "external_directory": {...} }` | `"permissions": { "allow": [...] }` |
+| On-demand skills | `~/.opencode/skill/` | `~/.claude/skills/` (via AGENTS.md) |
 
 ## Setup
 
@@ -18,7 +19,8 @@ Claude Code uses a different configuration system than opencode:
 
 ```bash
 mkdir -p ~/.tools/tools
-cp TOOLS.md TOOL_USE.md ~/.tools/
+cp TOOLS_QUICK.md ~/.tools/
+cp TOOLS.md ~/.tools/
 ```
 
 ### 2. Create `~/.claude/settings.json`
@@ -42,34 +44,47 @@ Create `~/.claude/settings.json`:
 }
 ```
 
-This grants Claude Code:
-- **Read access** to all files in `~/.tools/`
-- **Edit access** to modify/fix tools on the fly
-- **Bash execution** for running tools with `bun`
-
-### 3. Create `~/.claude/CLAUDE.md`
-
-Create `~/.claude/CLAUDE.md`:
+### 3. Create `~/.claude/AGENTS.md`
 
 ```markdown
 # Global Instructions
 
 ## Custom Tools
-See @~/.tools/TOOLS.md for available custom tools.
-See @~/.tools/TOOL_USE.md for tool usage guidelines.
-
-## Development Rules
-- Never run dev servers (bun run dev, bun run start) - assume user is running them
+See @~/.tools/TOOLS_QUICK.md for available custom tools.
+Run `--help` on any tool for detailed options.
+Full docs: @~/.tools/TOOLS.md
 ```
 
-The `@` syntax tells Claude Code to automatically import content from referenced files.
+Note: The `@` syntax tells Claude Code to automatically import content from referenced files.
+
+### 4. (Optional) Add the writing-tools skill
+
+```bash
+mkdir -p ~/.claude/skills/writing-tools
+cp skill/writing-tools/SKILL.md ~/.claude/skills/writing-tools/
+```
 
 ## How It Works
 
-1. Claude Code reads `~/.claude/CLAUDE.md` at startup
-2. The `@~/.tools/TOOLS.md` reference pulls in your tool catalog
-3. The `@~/.tools/TOOL_USE.md` reference provides usage guidelines
+1. Claude Code reads `~/.claude/AGENTS.md` at startup
+2. The `@~/.tools/TOOLS_QUICK.md` reference pulls in the compact tool catalog (~2KB)
+3. `TOOLS.md` is available on-demand for full documentation
 4. Permissions in `settings.json` allow Claude to execute and maintain tools
+5. When creating/editing tools, the agent references the writing-tools skill
+
+## Token Optimization
+
+The compact `TOOLS_QUICK.md` (~2KB) replaces the previous approach of loading full docs (~50KB) every session. This is a 96% reduction in per-message token overhead.
+
+| What | When | Size |
+|------|------|------|
+| `TOOLS_QUICK.md` (compact reference table) | Every session | ~2KB (~560 tokens) |
+| `writing-tools` skill | Only when creating/editing tools | ~3KB (~813 tokens) |
+| `TOOLS.md` (full documentation) | On-demand | ~50KB |
+| `tool.ts --help` | Only when using a specific tool | Varies |
+
+For detailed tool options: `tool.ts --help`
+For creating/editing tools: load the `writing-tools` skill
 
 ## Configuration Hierarchy
 
@@ -83,36 +98,11 @@ Claude Code supports multiple configuration scopes (highest to lowest priority):
 | Project | `.claude/settings.json` | Team-shared project settings |
 | User | `~/.claude/settings.json` | Global defaults |
 
-## Permission Rule Syntax
-
-| Pattern | Meaning |
-|---------|---------|
-| `Bash` | All bash commands |
-| `Bash(bun ~/.tools/tools/*)` | Tool execution only |
-| `Read(~/.tools/**)` | Read anything in ~/.tools/ recursively |
-| `Edit(~/.tools/**)` | Edit anything in ~/.tools/ recursively |
-
-## CLAUDE.md File Locations
+## AGENTS.md File Locations
 
 | Location | Scope | Shared with Team? |
 |----------|-------|-------------------|
-| `~/.claude/CLAUDE.md` | User (global) | No |
-| `CLAUDE.md` (project root) | Project | Yes |
-| `.claude/CLAUDE.md` | Project | Yes |
-| `CLAUDE.local.md` | Local (personal) | No (gitignored) |
-
-## Useful Commands
-
-| Command | Purpose |
-|---------|---------|
-| `/init` | Generate starter CLAUDE.md from project analysis |
-| `/config` | Open configuration interface |
-| `/permissions` | Manage tool permissions |
-| `/help` | List all available commands |
-
-## Differences from opencode
-
-1. **No `instructions` array** - Use `CLAUDE.md` files with `@imports` instead
-2. **Permission syntax** - Uses `allow`/`deny` arrays with tool-specific patterns
-3. **Multiple config scopes** - User, project, local, and managed settings
-4. **Built-in `@import`** - Reference external files directly in CLAUDE.md
+| `~/.claude/AGENTS.md` | User (global) | No |
+| `AGENTS.md` (project root) | Project | Yes |
+| `.claude/AGENTS.md` | Project | Yes |
+| `AGENTS.local.md` | Local (personal) | No (gitignored) |
